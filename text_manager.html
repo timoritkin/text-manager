@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Copy Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .input-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .text-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .text-frame {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .text-frame:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            background: #f8f9ff;
+        }
+
+        .text-frame.copied {
+            background: #d4edda;
+            animation: copyFlash 0.5s;
+        }
+
+        @keyframes copyFlash {
+            0%, 100% { background: white; }
+            50% { background: #d4edda; }
+        }
+
+        .text-content {
+            flex: 1;
+            word-wrap: break-word;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .delete-btn {
+            align-self: flex-end;
+            padding: 6px 12px;
+            background: #dc3545;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
+        .copy-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .copy-indicator.show {
+            opacity: 1;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            padding: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+        }
+
+        .hint {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        .export-btn, .import-btn {
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+
+        .export-btn {
+            background: #28a745;
+        }
+
+        .export-btn:hover {
+            background: #218838;
+        }
+
+        .import-btn {
+            background: #17a2b8;
+        }
+
+        .import-btn:hover {
+            background: #138496;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Text Copy Manager</h1>
+        
+        <div class="input-section">
+            <div class="input-group">
+                <textarea id="textInput" placeholder="Enter your text here..."></textarea>
+                <button onclick="addText()">Add Text</button>
+            </div>
+            <div class="hint">Click on any frame below to copy its text to clipboard</div>
+            <div class="file-actions">
+                <button onclick="exportTexts()" class="export-btn">📥 Export to JSON</button>
+                <button onclick="document.getElementById('fileInput').click()" class="import-btn">📤 Import from JSON</button>
+                <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="importTexts(event)">
+            </div>
+        </div>
+
+        <div id="textList" class="text-list"></div>
+    </div>
+
+    <script>
+        let texts = [];
+
+        function loadTexts() {
+            const saved = localStorage.getItem('copiedTexts');
+            if (saved) {
+                texts = JSON.parse(saved);
+                renderTexts();
+            }
+        }
+
+        function saveTexts() {
+            localStorage.setItem('copiedTexts', JSON.stringify(texts));
+        }
+
+        function addText() {
+            const input = document.getElementById('textInput');
+            const text = input.value.trim();
+            
+            if (text) {
+                texts.push({
+                    id: Date.now(),
+                    content: text
+                });
+                input.value = '';
+                saveTexts();
+                renderTexts();
+            }
+        }
+
+        function deleteText(id) {
+            texts = texts.filter(t => t.id !== id);
+            saveTexts();
+            renderTexts();
+        }
+
+        function copyText(id, text, el) {
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopySuccess(el);
+                }).catch(() => {
+                    fallbackCopy(text, el);
+                });
+            } else {
+                fallbackCopy(text, el);
+            }
+        }
+
+        function fallbackCopy(text, el) {
+            // Fallback method for mobile browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-9999px';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            
+            textarea.focus();
+            textarea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(el);
+                } else {
+                    alert('Failed to copy text. Please copy manually.');
+                }
+            } catch (err) {
+                alert('Failed to copy text. Please copy manually.');
+            }
+            
+            document.body.removeChild(textarea);
+        }
+
+        function showCopySuccess(el) {
+            const indicator = el.querySelector('.copy-indicator');
+            indicator.classList.add('show');
+            el.classList.add('copied');
+            
+            setTimeout(() => {
+                indicator.classList.remove('show');
+                el.classList.remove('copied');
+            }, 500);
+        }
+
+        function renderTexts() {
+            const list = document.getElementById('textList');
+            
+            if (texts.length === 0) {
+                list.innerHTML = '<div class="empty-state">No texts yet. Add your first text above!</div>';
+                return;
+            }
+
+            list.innerHTML = texts.map(t => `
+                <div class="text-frame" onclick="copyText(${t.id}, this.querySelector('.text-content').textContent, this)">
+                    <div class="copy-indicator">Copied!</div>
+                    <div class="text-content">${escapeHtml(t.content)}</div>
+                    <button class="delete-btn" onclick="event.stopPropagation(); deleteText(${t.id})">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.getElementById('textInput').addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                addText();
+            }
+        });
+
+        function exportTexts() {
+            if (texts.length === 0) {
+                alert('No texts to export!');
+                return;
+            }
+
+            const dataStr = JSON.stringify(texts, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `text-copy-manager-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function importTexts(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        const confirm = texts.length > 0 ? 
+                            window.confirm('Do you want to replace existing texts or merge them?\n\nOK = Replace\nCancel = Merge') : 
+                            true;
+                        
+                        if (confirm) {
+                            texts = imported;
+                        } else {
+                            texts = [...texts, ...imported];
+                        }
+                        
+                        saveTexts();
+                        renderTexts();
+                        alert(`Successfully imported ${imported.length} texts!`);
+                    } else {
+                        alert('Invalid JSON format. Expected an array of texts.');
+                    }
+                } catch (err) {
+                    alert('Error reading file. Make sure it\'s a valid JSON file.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        loadTexts();
+    </script>
+</body>
+</html>
